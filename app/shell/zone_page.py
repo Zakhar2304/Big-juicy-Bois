@@ -8,9 +8,11 @@ from collections.abc import Callable
 import flet as ft
 
 from app.contracts.labels import BTN_BACK, ZONE_LABELS
+from app.contracts.lookup import card_for
 from app.contracts.models import ZoneView
 from app.contracts.ports import Actions, GardenCanvas
-from app.contracts.lookup import card_for
+from app.desk_widgets import publish_pots
+from app.shell.desk_sheet import desk_sheet
 from app.shell.plant_form import plant_form
 from app.shell.pot_sheet import pot_sheet
 from app.shell.theme import CARD, GREEN, MIN_TAP, TEXT, fill
@@ -31,6 +33,7 @@ def zone_view(
     zone = view.zone
     overlay = ft.Stack(left=0, top=0, right=0, bottom=0)
     latest = {"view": view}
+    publish_pots(view.cards)
 
     def close_form() -> None:
         overlay.controls = []
@@ -40,10 +43,15 @@ def zone_view(
         latest["view"] = new_view
         canvas.show(new_view)
         on_changed(new_view)
+        publish_pots(new_view.cards)
 
     def planted(new_view: ZoneView) -> None:
         close_form()
         changed(new_view)
+
+    def open_desk() -> None:
+        overlay.controls = [desk_sheet(latest["view"].cards, close_form)]
+        overlay.update()
 
     def open_pot(pot_id: str) -> None:
         card = card_for(latest["view"], pot_id)
@@ -91,6 +99,18 @@ def zone_view(
             ],
         ),
     )
+    desk = ft.Container(
+        width=MIN_TAP + 4,
+        height=MIN_TAP + 4,
+        border_radius=MIN_TAP,
+        bgcolor=ft.Colors.with_opacity(0.9, CARD),
+        shadow=_SHADOW,
+        ink=True,
+        tooltip="На робочий стіл",
+        on_click=lambda _: open_desk(),
+        alignment=ft.Alignment.CENTER,
+        content=ft.Icon(ft.Icons.ADD_TO_HOME_SCREEN_ROUNDED, color=GREEN),
+    )
     banner = WeatherBanner()
     banner.show(view.alerts)
     if not view.alerts:
@@ -106,7 +126,10 @@ def zone_view(
             content=ft.Column(
                 tight=True,
                 spacing=8,
-                controls=[ft.Row(spacing=10, controls=[back, title]), banner.control()],
+                controls=[
+                    ft.Row(spacing=10, controls=[back, title, ft.Container(expand=True), desk]),
+                    banner.control(),
+                ],
             ),
         ),
     )

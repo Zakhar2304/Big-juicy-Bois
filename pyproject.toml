@@ -7,12 +7,15 @@ requires-python = ">=3.11"
 dependencies = [
   "flet>=1.0,<2",
   "httpx>=0.27",
+  "certifi>=2024.0.0",
 ]
 
 [tool.flet]
 org = "com.happygarden"
 product = "HappyGarden"
 company = "HappyGarden"
+# CocoaPods + serious_python: avoid SPM/Pods conflict on iOS
+swift_package_manager = false
 
 [tool.flet.app]
 module = "main.py"

@@ -11,8 +11,10 @@ from app.contracts.errors import ZoneNotFound
 from app.contracts.labels import APP_NAME, BTN_BACK, EMPTY_POTS, ZONE_LABELS
 from app.contracts.models import Zone, ZoneKind
 from app.contracts.ports import Actions, MakeCanvas
+from app.shell.friends_page import friends_view
 from app.shell.home import home_view
 from app.shell.onboarding import onboarding_view
+from app.shell.settings_page import settings_view
 from app.shell.theme import BG, CARD, GREEN, TEXT, fill
 from app.shell.zone_page import zone_view
 
@@ -118,8 +120,12 @@ def mount(page: ft.Page, actions: Actions, make_canvas: MakeCanvas) -> None:
         stage.controls.remove(old_layer)
         stage.update()
 
-    def not_ready() -> None:
-        """Друзі й налаштування поки лише кнопки."""
+    def go_settings() -> None:
+        show(settings_view(actions, on_back=go_home))
+
+    def go_friends() -> None:
+        zone = _pick_zone(actions)
+        show(friends_view(actions, zone.id if zone else "", on_back=go_home))
 
     def scene_for(zone: Zone) -> Callable[[], ft.Control] | None:
         """Сцена зони для розмитого фону меню: той самий стіл з її горщиками, без «+»."""
@@ -161,8 +167,8 @@ def mount(page: ft.Page, actions: Actions, make_canvas: MakeCanvas) -> None:
         screen = home_view(
             actions,
             on_open_zone=open_zone,
-            on_friends=not_ready,
-            on_settings=not_ready,
+            on_friends=go_friends,
+            on_settings=go_settings,
             on_new_zone=go_new_zone,
             scene_for=scene_for,
         )
