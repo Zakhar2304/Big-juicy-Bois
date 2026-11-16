@@ -75,6 +75,11 @@ def mount(page: ft.Page, actions: Actions, make_canvas: MakeCanvas) -> None:
     page.padding = 0
     page.spacing = 0
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
+    # Календарі (DatePicker) українською.
+    page.locale_configuration = ft.LocaleConfiguration(
+        supported_locales=[ft.Locale("uk", "UA")],
+        current_locale=ft.Locale("uk", "UA"),
+    )
 
     current: dict[str, ft.Control | None] = {"screen": None}
 
@@ -190,8 +195,19 @@ def mount(page: ft.Page, actions: Actions, make_canvas: MakeCanvas) -> None:
             go_home()
             return
         if zone.kind in SCENE_KINDS:
-            canvas = make_canvas(lambda _pot_id: None, lambda _pot_id, _x, _y: None)
-            screen = zone_view(actions, view, canvas, on_back=back_home, on_changed=lambda _v: None)
+            select: dict[str, Callable[[str], None]] = {}
+            canvas = make_canvas(
+                lambda pot_id: select["open"](pot_id) if "open" in select else None,
+                lambda _pot_id, _x, _y: None,
+            )
+            screen = zone_view(
+                actions,
+                view,
+                canvas,
+                on_back=back_home,
+                on_changed=lambda _v: None,
+                bind_select=lambda handler: select.__setitem__("open", handler),
+            )
         else:
             screen = _zone_stub(view.zone, len(view.cards), back_home)
         transition(screen, forward=True)

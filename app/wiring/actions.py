@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.contracts.models import (
     FarmScore,
     LeaderboardRow,
@@ -67,16 +69,25 @@ class GardenActions:
     def describe(self, name: str, variety: str, soil: SoilType, zone_id: str) -> SpeciesProfile:
         raise NotImplementedError("app/wiring/actions.py describe")
 
-    def plant(self, zone_id: str, name: str, variety: str, soil: SoilType, x: float, y: float) -> ZoneView:
+    def plant(
+        self,
+        zone_id: str,
+        name: str,
+        variety: str,
+        soil: SoilType,
+        x: float,
+        y: float,
+        planted_at: datetime | None = None,
+    ) -> ZoneView:
         raise NotImplementedError("app/wiring/actions.py plant")
 
     def move_pot(self, zone_id: str, pot_id: str, x: float, y: float) -> ZoneView:
         raise NotImplementedError("app/wiring/actions.py move_pot")
 
-    def water(self, zone_id: str, pot_id: str) -> ZoneView:
+    def water(self, zone_id: str, pot_id: str, at: datetime | None = None) -> ZoneView:
         raise NotImplementedError("app/wiring/actions.py water")
 
-    def fertilize(self, zone_id: str, pot_id: str) -> ZoneView:
+    def fertilize(self, zone_id: str, pot_id: str, at: datetime | None = None) -> ZoneView:
         raise NotImplementedError("app/wiring/actions.py fertilize")
 
     def harvest(self, zone_id: str, pot_id: str) -> ZoneView:

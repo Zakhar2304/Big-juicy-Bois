@@ -249,6 +249,18 @@ class LeaderboardRow:
 
 
 @dataclass(frozen=True)
+class GrowthForecast:
+    """Прогноз етапів з поточного стану. Рахує app/core/forecast.py, формула — docs/RULES.md.
+
+    Наближення: здоров'я лишається як зараз. None — такого етапу вже не буде (стиглий або зібраний).
+    """
+
+    next_stage: GrowthStage | None
+    next_stage_at: datetime | None
+    ripe_at: datetime | None
+
+
+@dataclass(frozen=True)
 class PotCard:
     """Усе, що екран показує по одному горщику. Збирає лише фасад дій."""
 
@@ -256,6 +268,7 @@ class PotCard:
     species: SpeciesProfile
     plan: CarePlan
     timeline: tuple[StageMark, ...] = ()
+    forecast: GrowthForecast | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "timeline", tuple(self.timeline))

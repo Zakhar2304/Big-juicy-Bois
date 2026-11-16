@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from app.contracts.checks import (
     clamp_world,
@@ -99,7 +99,16 @@ class FakeActions:
             raise SpeciesNotFound(name)
         return replace(found[0], variety=clean_variety(variety))
 
-    def plant(self, zone_id: str, name: str, variety: str, soil: SoilType, x: float, y: float) -> ZoneView:
+    def plant(
+        self,
+        zone_id: str,
+        name: str,
+        variety: str,
+        soil: SoilType,
+        x: float,
+        y: float,
+        planted_at: datetime | None = None,
+    ) -> ZoneView:
         species = self.describe(name, variety, soil, zone_id)
         point = clamp_world(x, y)
         zone = self._zone(zone_id)
@@ -109,7 +118,7 @@ class FakeActions:
             soil_type=self._soil(soil),
             territory=zone.territory,
             zone_kind=zone.kind,
-            planted_at=sim_now(self.settings),
+            planted_at=planted_at or sim_now(self.settings),
         )
         pot = Pot(
             id=new_id(),
@@ -133,11 +142,11 @@ class FakeActions:
         self._replace(zone_id, pot_id, x=point[0], y=point[1])
         return self.open_zone(zone_id)
 
-    def water(self, zone_id: str, pot_id: str) -> ZoneView:
+    def water(self, zone_id: str, pot_id: str, at: datetime | None = None) -> ZoneView:
         self._replace(zone_id, pot_id, moisture=0.95, mood=Mood.HAPPY)
         return self.open_zone(zone_id)
 
-    def fertilize(self, zone_id: str, pot_id: str) -> ZoneView:
+    def fertilize(self, zone_id: str, pot_id: str, at: datetime | None = None) -> ZoneView:
         pot = self._pot(zone_id, pot_id)
         self._replace(zone_id, pot_id, fertility=min(1.0, pot.fertility + 0.25), mood=Mood.HAPPY)
         return self.open_zone(zone_id)

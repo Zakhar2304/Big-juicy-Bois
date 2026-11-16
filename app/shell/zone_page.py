@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 
 import flet as ft
@@ -9,8 +10,11 @@ import flet as ft
 from app.contracts.labels import BTN_BACK, ZONE_LABELS
 from app.contracts.models import ZoneView
 from app.contracts.ports import Actions, GardenCanvas
+from app.contracts.lookup import card_for
 from app.shell.plant_form import plant_form
+from app.shell.pot_sheet import pot_sheet
 from app.shell.theme import CARD, GREEN, MIN_TAP, TEXT, fill
+from app.shell.weather_banner import WeatherBanner, poll_alerts
 
 _SHADOW = ft.BoxShadow(blur_radius=16, color=ft.Colors.with_opacity(0.18, TEXT), offset=ft.Offset(0, 4))
 
@@ -21,18 +25,35 @@ def zone_view(
     canvas: GardenCanvas,
     on_back: Callable[[], None],
     on_changed: Callable[[ZoneView], None],
+    bind_select: Callable[[Callable[[str], None]], None] | None = None,
 ) -> ft.Control:
+    """bind_select отримує обробник натискання на горщик: mount передає його в полотно."""
     zone = view.zone
     overlay = ft.Stack(left=0, top=0, right=0, bottom=0)
+    latest = {"view": view}
 
     def close_form() -> None:
         overlay.controls = []
         overlay.update()
 
-    def planted(new_view: ZoneView) -> None:
-        close_form()
+    def changed(new_view: ZoneView) -> None:
+        latest["view"] = new_view
         canvas.show(new_view)
         on_changed(new_view)
+
+    def planted(new_view: ZoneView) -> None:
+        close_form()
+        changed(new_view)
+
+    def open_pot(pot_id: str) -> None:
+        card = card_for(latest["view"], pot_id)
+        if card is None:
+            return
+        overlay.controls = [pot_sheet(actions, zone.id, card, changed, close_form)]
+        overlay.update()
+
+    if bind_select is not None:
+        bind_select(open_pot)
 
     def open_form() -> None:
         x, y = canvas.spawn_point()
@@ -70,8 +91,24 @@ def zone_view(
             ],
         ),
     )
+    banner = WeatherBanner()
+    banner.show(view.alerts)
+    if not view.alerts:
+        threading.Thread(
+            target=poll_alerts,
+            args=(lambda: actions.open_zone(zone.id).alerts, banner, lambda: True),
+            daemon=True,
+        ).start()
+
     top_bar = ft.SafeArea(
-        content=ft.Container(padding=16, content=ft.Row(spacing=10, controls=[back, title])),
+        content=ft.Container(
+            padding=16,
+            content=ft.Column(
+                tight=True,
+                spacing=8,
+                controls=[ft.Row(spacing=10, controls=[back, title]), banner.control()],
+            ),
+        ),
     )
 
     return ft.Stack(

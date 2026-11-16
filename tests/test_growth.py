@@ -13,6 +13,7 @@ from app.contracts.models import (
     CropGroup,
     FarmScore,
     Friend,
+    GrowthForecast,
     GrowthStage,
     Mood,
     PlantingProfile,
@@ -24,6 +25,7 @@ from app.contracts.models import (
 )
 from app.contracts.samples import sample_species
 from app.core.care import TIP_FERTILIZE, TIP_HARVEST, TIP_WATER_NOW, CarePlanner, water_interval_days
+from app.core.forecast import forecast
 from app.core.groups import GroupBuilder
 from app.core.growth import GrowthEngine, _apply_event, _State
 from app.core.score import Scoreboard
@@ -316,6 +318,37 @@ class ScoreTests(unittest.TestCase):
         self.assertEqual([r.nickname for r in rows], ["Боб", "Я", "Аня"])
         self.assertTrue(rows[1].is_you)
         self.assertEqual(sum(r.is_you for r in rows), 1)
+
+
+class ForecastTests(unittest.TestCase):
+    def test_fresh_pot_full_health_speed(self) -> None:
+        pot = replace(Garden(cucumber()).pot, health=1.0)
+        result = forecast(pot, cucumber(), T0)
+        self.assertEqual(result.next_stage, GrowthStage.GROWING)
+        self.assertEqual(result.next_stage_at, day(7))
+        self.assertEqual(result.ripe_at, day(47))
+
+    def test_middle_of_stage_and_bad_soil(self) -> None:
+        pot = replace(Garden(cucumber(), soil=SoilType.SAND).pot, stage=GrowthStage.GROWING, stage_progress=0.5, health=1.0)
+        result = forecast(pot, cucumber(), T0)
+        # кредит 7 + 12 = 19; швидкість 0.8; до цвітіння 12 / 0.8 = 15 діб
+        self.assertEqual(result.next_stage, GrowthStage.FLOWERING)
+        self.assertEqual(result.next_stage_at, day(15))
+        self.assertEqual(result.ripe_at, day(28 / 0.8))
+
+    def test_slower_variety_ripens_later(self) -> None:
+        slow = replace(cucumber(), variety="повільний", stage_days={"sprout": 10, "growing": 30, "flowering": 10, "fruiting": 10, "ripe": 10})
+        fast_pot = replace(Garden(cucumber()).pot, health=1.0)
+        self.assertLess(forecast(fast_pot, cucumber(), T0).ripe_at, forecast(fast_pot, slow, T0).ripe_at)
+
+    def test_zero_day_stage_is_skipped(self) -> None:
+        carrot_like = replace(cucumber(), stage_days={"sprout": 5, "growing": 10, "flowering": 0, "fruiting": 8, "ripe": 4})
+        pot = replace(Garden(carrot_like).pot, stage=GrowthStage.GROWING, stage_progress=0.0, health=1.0)
+        self.assertEqual(forecast(pot, carrot_like, T0).next_stage, GrowthStage.FRUITING)
+
+    def test_ripe_has_no_forecast(self) -> None:
+        pot = replace(Garden(cucumber()).pot, stage=GrowthStage.RIPE)
+        self.assertEqual(forecast(pot, cucumber(), T0), GrowthForecast(None, None, None))
 
 
 if __name__ == "__main__":

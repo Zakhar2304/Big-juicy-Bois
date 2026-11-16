@@ -181,13 +181,26 @@ class Actions(Protocol):
 
     def describe(self, name: str, variety: str, soil: SoilType, zone_id: str) -> SpeciesProfile: ...
 
-    def plant(self, zone_id: str, name: str, variety: str, soil: SoilType, x: float, y: float) -> ZoneView: ...
+    def plant(
+        self,
+        zone_id: str,
+        name: str,
+        variety: str,
+        soil: SoilType,
+        x: float,
+        y: float,
+        planted_at: datetime | None = None,
+    ) -> ZoneView:
+        """planted_at у минулому — посадка, зроблена ще до застосунку. None — зараз (sim_now)."""
+        ...
 
     def move_pot(self, zone_id: str, pot_id: str, x: float, y: float) -> ZoneView: ...
 
-    def water(self, zone_id: str, pot_id: str) -> ZoneView: ...
+    def water(self, zone_id: str, pot_id: str, at: datetime | None = None) -> ZoneView:
+        """at — коли полили насправді, якщо записують пізніше. None — зараз (sim_now)."""
+        ...
 
-    def fertilize(self, zone_id: str, pot_id: str) -> ZoneView: ...
+    def fertilize(self, zone_id: str, pot_id: str, at: datetime | None = None) -> ZoneView: ...
 
     def harvest(self, zone_id: str, pot_id: str) -> ZoneView: ...
 

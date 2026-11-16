@@ -33,6 +33,13 @@
 
 Екрани викликають методи `Actions` з `app.contracts.ports`. Вони отримують готові `ZoneView`, `PotCard`, `WidgetSnapshot`, `LeaderboardRow`. Відсотки показують через `as_percent`. Усі написи беруть з `app.contracts.labels`.
 
+Зміни контракту від 16.11 (людина 1, сумісні, старі виклики працюють):
+
+- `Actions.plant(..., planted_at=None)` — посадка в минулому. Фасад додає припущені поливи (`docs/RULES.md`, «Посадка в минулому»).
+- `Actions.water(..., at=None)` і `fertilize(..., at=None)` — догляд, записаний пізніше.
+- `PotCard.forecast: GrowthForecast | None` — коли наступний етап і стиглість. Рахує `app/core/forecast.py`, фасад кладе в картку на кроці 8 `open_zone`.
+- Сорти: у `species.json` кілька записів з тим самим `species_id` і різним `variety`. `find(name, variety)` повертає запис сорту, і прогноз іде за його днями етапів.
+
 `FakeActions` малює вітрину для верстки. Це не правила росту. Правила лише в `docs/RULES.md`.
 
 Перевірки назв, ніків, ґрунту і меж карти: `app.contracts.checks`. І фейк, і справжній фасад викликають їх.

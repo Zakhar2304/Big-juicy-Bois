@@ -192,7 +192,9 @@ class FarmBench:
 
 def _drawn_pot(glyph: str, w: float, h: float) -> ft.Control:
     """Запасний горщик, коли для культури ще немає PNG: глиняний горщик і glyph з довідки."""
-    pot_w, pot_h = w * 0.8, h * 0.42
+    # Розмір як у рендерах render_pots.py: горщик 0.62 ширини кадру, тіло ~0.3 висоти.
+    pot_w, pot_h = w * PICTURE_POT_SHARE, h * 0.3
+    rim_h = pot_h * 0.18
     return ft.Container(
         width=w,
         height=h,
@@ -201,13 +203,16 @@ def _drawn_pot(glyph: str, w: float, h: float) -> ft.Control:
             alignment=ft.MainAxisAlignment.END,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Text(glyph or "🌱", size=w * 0.42),
+                ft.Text(glyph or "🌱", size=w * 0.28),
+                ft.Container(width=pot_w * 1.06, height=rim_h, bgcolor="#A0533B", border_radius=4),
                 ft.Container(
                     width=pot_w,
-                    height=pot_h,
+                    height=pot_h - rim_h,
                     margin=ft.Margin(0, 0, 0, h * (1 - PICTURE_FOOT)),
-                    bgcolor="#B5654A",
-                    border_radius=ft.BorderRadius(6, 6, pot_w * 0.3, pot_w * 0.3),
+                    bgcolor="#8E4A35",
+                    border_radius=ft.BorderRadius(2, 2, pot_w * 0.18, pot_w * 0.18),
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Text("• ‿ •", size=w * 0.09, color="#2B1A14"),
                 ),
             ],
         ),
