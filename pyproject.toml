@@ -22,3 +22,7 @@ module = "main.py"
 
 [tool.flet.ios]
 bundle_id = "com.happygarden.app"
+
+[tool.flet.web]
+# Netlify віддає лише index.html. Hash не вимагає окремої сторінки на кожен маршрут.
+route_url_strategy = "hash"
