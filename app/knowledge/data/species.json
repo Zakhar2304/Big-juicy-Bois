@@ -1,0 +1,32 @@
+{
+  "species": [
+    {
+      "species_id": "cucumber",
+      "name": "Огірок",
+      "variety": "загальний",
+      "category": "vegetable",
+      "glyph": "🥒",
+      "color_hex": "#2E7D32",
+      "regrows": true,
+      "verified": false,
+      "stage_days": {
+        "sprout": 7,
+        "growing": 24,
+        "flowering": 8,
+        "fruiting": 8,
+        "ripe": 12
+      },
+      "ideal_soil": "loam",
+      "soil_ph": [6.0, 7.0],
+      "temp_c": [20, 28],
+      "water_every_days": 2,
+      "fertilize_every_days": 14,
+      "summary": "Чернетка для каркаса. Заміни числа і цей текст на довідку з реального джерела і впиши URL у sources.",
+      "tips": [
+        "Тримай землю вологою, без болота",
+        "Тепло без різких холодних ночей"
+      ],
+      "sources": []
+    }
+  ]
+}
