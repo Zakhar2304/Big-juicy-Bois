@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import flet as ft
 
 BG = "#F4F7F2"
@@ -27,16 +29,25 @@ def fill(control: ft.Control) -> ft.Control:
     return control
 
 
-def greenhouse_backdrop(blur: float = 18, clear_center: bool = True, veil: float = 0.12) -> list[ft.Control]:
-    """Шари фону для Stack: розмита теплиця, а ближче до центру вона чітка.
+def greenhouse_backdrop(
+    blur: float = 18,
+    clear_center: bool = True,
+    veil: float = 0.12,
+    make_scene: Callable[[], ft.Control] | None = None,
+) -> list[ft.Control]:
+    """Шари фону для Stack: розмита сцена, а ближче до центру вона чітка.
 
-    1. Сама картинка.
+    make_scene будує сцену (за замовчуванням фото теплиці). Її кличуть двічі:
+    один екземпляр розмивається, другий видно крізь коло.
+
+    1. Сама сцена.
     2. Розмиття всього, що позаду (backdrop blur), і легка біла вуаль.
     3. Та сама картинка ще раз, але з радіальною маскою: у центрі видно повністю,
        до країв плавно зникає в розмиття.
     """
+    scene = make_scene or (lambda: ft.Image(src=GREENHOUSE_BG, fit=ft.BoxFit.COVER))
     layers: list[ft.Control] = [
-        fill(ft.Image(src=GREENHOUSE_BG, fit=ft.BoxFit.COVER)),
+        fill(ft.Container(content=scene())),
         fill(
             ft.Container(
                 blur=ft.Blur(blur, blur, ft.BlurTileMode.MIRROR),
@@ -48,7 +59,7 @@ def greenhouse_backdrop(blur: float = 18, clear_center: bool = True, veil: float
         layers.append(
             fill(
                 ft.ShaderMask(
-                    content=ft.Image(src=GREENHOUSE_BG, fit=ft.BoxFit.COVER),
+                    content=scene(),
                     shader=ft.RadialGradient(
                         center=ft.Alignment(0, -0.02),
                         radius=0.5,

@@ -2,7 +2,8 @@
 
 Над колом по дузі — профілі зон, стрілки по краях гортають, якщо їх більше трьох.
 Під колом: «Друзі» зліва, «+» нова зона по центру, «Налаштування» справа.
-Зверху назва вибраної зони. У колі — плоди цієї зони, якщо їхні картинки вже лежать в assets/fruits.
+Зверху назва вибраної зони. Фон — сцена зони (для фазенди стіл з її горщиками), якщо mount її дає;
+інакше фото теплиці, а горщики зони стоять у колі.
 """
 
 from __future__ import annotations
@@ -10,7 +11,6 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import replace
-from pathlib import Path
 
 import flet as ft
 import flet.canvas as cv
@@ -26,6 +26,7 @@ from app.contracts.labels import (
 )
 from app.contracts.models import Zone, ZoneKind, ZoneView
 from app.contracts.ports import Actions
+from app.contracts.pictures import PICTURE_RATIO, pot_picture
 from app.shell.theme import CARD, GREEN, TEXT, fill, greenhouse_backdrop
 
 SWIPE_MIN_PX = 40
@@ -58,9 +59,8 @@ ZONE_ICONS: dict[ZoneKind, ft.IconData] = {
     ZoneKind.FARM: ft.Icons.HOUSE_ROUNDED,  # домик
 }
 
-# Плоди для фону меню. Поки папка порожня, у колі нічого не малюється.
-FRUITS_DIR = Path(__file__).resolve().parents[2] / "assets" / "fruits"
-FRUIT_SIZE = 56
+# Горщики зони в колі, коли власної сцени в зони немає.
+FRUIT_SIZE = 64
 MAX_FRUITS = 8
 
 _SHADOW = ft.BoxShadow(blur_radius=16, color=ft.Colors.with_opacity(0.18, TEXT), offset=ft.Offset(0, 4))
@@ -315,33 +315,21 @@ def _round_button(
     )
 
 
-def _fruit_file(species_id: str, stage: str) -> str | None:
-    """Картинка плоду: спершу для етапу, потім загальна. Повертає шлях відносно assets/."""
-    for name in (f"{species_id}_{stage}.png", f"{species_id}.png"):
-        if (FRUITS_DIR / name).is_file():
-            return f"fruits/{name}"
-    return None
-
-
-def _has_fruit_images() -> bool:
-    return FRUITS_DIR.is_dir() and any(FRUITS_DIR.glob("*.png"))
-
-
 def _fruit_controls(actions: Actions, zone: Zone | None) -> list[ft.Control]:
-    """Плоди вибраної зони для фону кола. Без картинок у папці зону навіть не відкриваємо."""
-    if zone is None or not _has_fruit_images():
+    """Горщики вибраної зони для кола. Картинки — з app.contracts.pictures, без них glyph."""
+    if zone is None:
         return []
     try:
         view: ZoneView = actions.open_zone(zone.id)
     except Exception:  # noqa: BLE001 — фон меню не має падати через зону
         return []
     images: list[ft.Control] = []
-    for card in view.cards:
-        src = _fruit_file(card.pot.profile.species_id, card.pot.stage.value)
+    for card in view.cards[:MAX_FRUITS]:
+        src = pot_picture(card.pot.profile.species_id, card.pot.stage)
         if src:
-            images.append(ft.Image(src=src, width=FRUIT_SIZE, height=FRUIT_SIZE, fit=ft.BoxFit.CONTAIN))
-        if len(images) >= MAX_FRUITS:
-            break
+            images.append(ft.Image(src=src, width=FRUIT_SIZE * PICTURE_RATIO, height=FRUIT_SIZE, fit=ft.BoxFit.CONTAIN))
+        else:
+            images.append(ft.Text(card.species.glyph, size=FRUIT_SIZE * 0.5))
     return images
 
 
@@ -352,13 +340,17 @@ def home_view(
     on_settings: Callable[[], None],
     on_status: Callable[[], None] | None = None,
     on_new_zone: Callable[[], None] | None = None,
+    scene_for: Callable[[Zone], Callable[[], ft.Control] | None] | None = None,
 ) -> ft.Control:
     """on_status поки не має кнопки: картки стану додасть людина 2."""
     del on_status
 
     title = ft.Text("", size=24, weight=ft.FontWeight.BOLD, color=TEXT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
     caption = ft.Text("", size=13, color=ft.Colors.with_opacity(0.75, TEXT))
+    # Смуга меню (canvas) лежить під колом, бо canvas забирає натискання; кнопки — над ним.
+    band = ft.Stack(width=STAGE_W, height=STAGE_H)
     arc = ft.Stack(width=STAGE_W, height=STAGE_H)
+    backdrop = ft.Stack(expand=True)
     fruits = ft.Row(
         wrap=True,
         spacing=4,
@@ -373,7 +365,9 @@ def home_view(
         current = _current_zone(actions, zones)
         title.value = current.name if current else APP_NAME
         caption.value = f"{ZONE_LABELS[current.kind]} · {current.territory}" if current else ""
-        fruits.controls = _fruit_controls(actions, current)
+        make_scene = scene_for(current) if scene_for and current else None
+        backdrop.controls = greenhouse_backdrop(make_scene=make_scene)
+        fruits.controls = [] if make_scene else _fruit_controls(actions, current)
 
         visible = min(ARC_SLOTS, len(zones))
         max_offset = max(0, len(zones) - visible)
@@ -387,7 +381,11 @@ def home_view(
                 (zone, angle, current is not None and zone.id == current.id)
                 for zone, angle in zip(window, _arc_angles(visible))
             ]
-            controls.extend(_menu(_band_span(visible, arrows), slots, select))
+            canvas, *menu_controls = _menu(_band_span(visible, arrows), slots, select)
+            band.controls = [canvas]
+            controls.extend(menu_controls)
+        else:
+            band.controls = []
         if arrows:
             controls.append(_arrow(-90 - ARROW_ANGLE, -1, lambda _: scroll(-1), state["offset"] > 0))
             controls.append(_arrow(-90 + ARROW_ANGLE, 1, lambda _: scroll(1), state["offset"] < max_offset))
@@ -395,7 +393,7 @@ def home_view(
 
     def redraw() -> None:
         refresh()
-        for control in (title, caption, arc, fruits):
+        for control in (title, caption, band, arc, fruits, backdrop):
             control.update()
 
     def select(zone: Zone) -> None:
@@ -486,6 +484,7 @@ def home_view(
         width=STAGE_W,
         height=STAGE_H,
         controls=[
+            fill(band),
             ft.Container(left=circle_left, top=circle_top, content=fruit_layer),
             ft.Container(left=circle_left, top=circle_top, content=portal),
             fill(arc),
@@ -541,5 +540,7 @@ def home_view(
         on_vertical_drag_start=drag_start,
         on_vertical_drag_update=drag_update,
         on_vertical_drag_end=drag_end,
-        content=ft.Stack(expand=True, controls=[*greenhouse_backdrop(), fill(overlay)]),
+        animate_scale=ft.Animation(420, ft.AnimationCurve.EASE_IN),
+        animate_opacity=ft.Animation(420, ft.AnimationCurve.EASE_IN),
+        content=ft.Stack(expand=True, controls=[fill(backdrop), fill(overlay)]),
     )
