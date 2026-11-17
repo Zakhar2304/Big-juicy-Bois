@@ -131,10 +131,13 @@ def poll_alerts(
     load: Callable[[], tuple[WeatherAlert, ...]],
     banner: WeatherBanner,
     still_current: Callable[[], bool],
-    tries: int = 40,
-    pause_s: float = 0.4,
+    tries: int = 20,
+    pause_s: float = 0.6,
 ) -> None:
-    """Для фонового потоку: чекати, доки фасад принесе погоду, і оновити банер."""
+    """Для фонового потоку: чекати, доки фасад принесе погоду, і оновити банер.
+
+    Не викликайте тут важкий open_zone кожні 0.4 с — лише легкий load (alerts_for_zone).
+    """
     import time
 
     for _ in range(tries):

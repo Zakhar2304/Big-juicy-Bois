@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HappyGarden — вхід…</title>
+</head>
+<body style="font-family: system-ui, sans-serif; padding: 24px; color: #1B2E1B;">
+  <p>Завершуємо вхід через Google…</p>
+  <script>
+    (function () {
+      var hash = window.location.hash || "";
+      var search = window.location.search || "";
+      var raw = "";
+      if (hash.indexOf("access_token=") >= 0) {
+        raw = hash.charAt(0) === "#" ? hash.slice(1) : hash;
+      } else if (search.indexOf("access_token=") >= 0 || search.indexOf("code=") >= 0) {
+        raw = search.charAt(0) === "?" ? search.slice(1) : search;
+      }
+      if (!raw) {
+        window.location.replace("/#/");
+        return;
+      }
+      // Flet hash-strategy читає page.route з фрагмента після #/
+      window.location.replace("/#/?" + raw);
+    })();
+  </script>
+</body>
+</html>

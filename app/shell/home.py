@@ -28,6 +28,8 @@ from app.contracts.labels import (
 from app.contracts.models import Zone, ZoneKind, ZoneView
 from app.contracts.ports import Actions
 from app.contracts.pictures import PICTURE_RATIO, pot_picture
+from app.shell.home_widgets import HomeWidgets
+from app.shell.perf import pot_image
 from app.shell.theme import CARD, GREEN, TEXT, fill, greenhouse_backdrop
 from app.shell.weather_banner import WeatherBanner, poll_alerts
 
@@ -317,19 +319,25 @@ def _round_button(
     )
 
 
-def _fruit_controls(actions: Actions, zone: Zone | None) -> list[ft.Control]:
-    """Горщики вибраної зони для кола. Картинки — з app.contracts.pictures, без них glyph."""
+def _zone_view(actions: Actions, zone: Zone | None) -> tuple[ZoneView | None, bool]:
+    """Зріз зони для плодів у колі і віджетів. Друге значення — не вдалося відкрити."""
     if zone is None:
-        return []
+        return None, False
     try:
-        view: ZoneView = actions.open_zone(zone.id)
+        return actions.open_zone(zone.id), False
     except Exception:  # noqa: BLE001 — фон меню не має падати через зону
+        return None, True
+
+
+def _fruit_controls(view: ZoneView | None) -> list[ft.Control]:
+    """Горщики вибраної зони для кола. Картинки — з app.contracts.pictures, без них glyph."""
+    if view is None:
         return []
     images: list[ft.Control] = []
     for card in view.cards[:MAX_FRUITS]:
         src = pot_picture(card.pot.profile.species_id, card.pot.stage)
         if src:
-            images.append(ft.Image(src=src, width=FRUIT_SIZE * PICTURE_RATIO, height=FRUIT_SIZE, fit=ft.BoxFit.CONTAIN))
+            images.append(pot_image(src, FRUIT_SIZE * PICTURE_RATIO, FRUIT_SIZE))
         else:
             images.append(ft.Text(card.species.glyph, size=FRUIT_SIZE * 0.5))
     return images
@@ -362,6 +370,7 @@ def home_view(
     )
     state = {"offset": 0, "weather_for": None}
     banner = WeatherBanner()
+    widgets = HomeWidgets(actions, STAGE_W - 24)
 
     def start_weather(zone: Zone | None) -> None:
         """Погода зони приходить через фасад у фоні; банер чекає, поки вона з'явиться."""
@@ -369,10 +378,16 @@ def home_view(
         banner.loading()
         if zone is None:
             return
+        def load_alerts() -> tuple:
+            peek = getattr(actions, "alerts_for_zone", None)
+            if callable(peek):
+                return peek(zone.id)
+            return actions.open_zone(zone.id).alerts
+
         threading.Thread(
             target=poll_alerts,
             args=(
-                lambda: actions.open_zone(zone.id).alerts,
+                load_alerts,
                 banner,
                 lambda: state["weather_for"] == zone.id,
             ),
@@ -388,7 +403,9 @@ def home_view(
             start_weather(current)
         make_scene = scene_for(current) if scene_for and current else None
         backdrop.controls = greenhouse_backdrop(make_scene=make_scene)
-        fruits.controls = [] if make_scene else _fruit_controls(actions, current)
+        view, failed = _zone_view(actions, current)
+        fruits.controls = [] if make_scene else _fruit_controls(view)
+        widgets.show(None if failed else view, failed=failed)
 
         visible = min(ARC_SLOTS, len(zones))
         max_offset = max(0, len(zones) - visible)
@@ -416,6 +433,7 @@ def home_view(
         refresh()
         for control in (title, caption, banner.control(), band, arc, fruits, backdrop):
             control.update()
+        widgets.update()
 
     def select(zone: Zone) -> None:
         settings = actions.get_settings()
@@ -444,6 +462,8 @@ def home_view(
         drag["last"] = e.global_position.y
 
     def drag_end(_: ft.DragEndEvent) -> None:
+        if widgets.open:
+            return
         if drag["start"] - drag["last"] > SWIPE_MIN_PX:
             on_open_zone()
 
@@ -514,19 +534,8 @@ def home_view(
     )
 
     header = ft.Container(
-        padding=ft.Padding(20, 8, 20, 8),
-        border_radius=20,
-        bgcolor=ft.Colors.with_opacity(0.7, CARD),
-        content=ft.Column(
-            tight=True,
-            spacing=0,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[title, caption, ft.Container(margin=ft.Margin(0, 6, 0, 0), content=banner.control())],
-        ),
-    )
-
-    hint = ft.Container(
-        padding=ft.Padding(16, 4, 16, 8),
+        width=STAGE_W,
+        padding=ft.Padding(12, 8, 12, 10),
         border_radius=20,
         bgcolor=ft.Colors.with_opacity(0.7, CARD),
         content=ft.Column(
@@ -534,8 +543,25 @@ def home_view(
             spacing=0,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Icon(ft.Icons.KEYBOARD_ARROW_UP_ROUNDED, color=GREEN, size=26),
-                ft.Text(HINT_SWIPE, color=TEXT, size=13, weight=ft.FontWeight.W_500),
+                title,
+                caption,
+                ft.Container(margin=ft.Margin(0, 6, 0, 0), content=banner.control()),
+                ft.Container(margin=ft.Margin(0, 8, 0, 0), content=widgets.control),
+            ],
+        ),
+    )
+
+    hint = ft.Container(
+        padding=ft.Padding(12, 2, 12, 2),
+        border_radius=16,
+        bgcolor=ft.Colors.with_opacity(0.7, CARD),
+        content=ft.Row(
+            tight=True,
+            spacing=2,
+            alignment=ft.MainAxisAlignment.CENTER,
+            controls=[
+                ft.Icon(ft.Icons.KEYBOARD_ARROW_UP_ROUNDED, color=GREEN, size=18),
+                ft.Text(HINT_SWIPE, color=TEXT, size=12, weight=ft.FontWeight.W_600),
             ],
         ),
     )
@@ -545,7 +571,7 @@ def home_view(
             padding=16,
             content=ft.Column(
                 expand=True,
-                spacing=10,
+                spacing=8,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
                     header,
@@ -563,5 +589,5 @@ def home_view(
         on_vertical_drag_end=drag_end,
         animate_scale=ft.Animation(420, ft.AnimationCurve.EASE_IN),
         animate_opacity=ft.Animation(420, ft.AnimationCurve.EASE_IN),
-        content=ft.Stack(expand=True, controls=[fill(backdrop), fill(overlay)]),
+        content=ft.Stack(expand=True, controls=[fill(backdrop), fill(overlay), fill(widgets.sheet)]),
     )

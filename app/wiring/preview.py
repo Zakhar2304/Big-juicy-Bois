@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from dataclasses import replace
@@ -36,6 +37,7 @@ from app.contracts.models import (
     SoilType,
     SpeciesProfile,
     WeatherAlert,
+    ZoneKind,
     ZoneView,
 )
 from app.core.care import CarePlanner, water_interval_days
@@ -44,6 +46,7 @@ from app.core.growth import GrowthEngine
 from app.core.timeutil import as_utc
 from app.knowledge.catalog import FarmingCatalog
 from app.knowledge.weather import CALM_TITLE, WeatherService
+from app.storage.store import GardenStore
 
 ALERTS_TTL_S = 10 * 60
 ASSUMED_NOTE = "припущено"
@@ -97,6 +100,41 @@ class PreviewActions(FakeActions):
         self._alerts: dict[str, tuple[float, tuple[WeatherAlert, ...]]] = {}
         self._loading: set[str] = set()
         self._lock = threading.Lock()
+        self._store = GardenStore(_garden_db_path())
+        self._load()
+
+    def _load(self) -> None:
+        settings, zones, pots, events = self._store.load_garden()
+        if not zones and not pots:
+            return
+        self.settings = settings
+        self.zones = zones
+        self.pots = pots
+        self.events = events
+
+    def _persist(self) -> None:
+        self._store.save_garden(self.settings, list(self.zones), list(self.pots), list(self.events))
+
+    def create_zone(self, name: str, kind: ZoneKind, territory: str):  # type: ignore[override]
+        zone = super().create_zone(name, kind, territory)
+        self._persist()
+        return zone
+
+    def save_settings(self, settings: Settings) -> Settings:
+        saved = super().save_settings(settings)
+        self._persist()
+        return saved
+
+    def wipe_local(self) -> None:
+        """Стирає локальний сад (після видалення акаунта)."""
+        self.zones.clear()
+        self.pots.clear()
+        self.groups.clear()
+        self.events.clear()
+        self.settings = Settings()
+        self._alerts.clear()
+        self._loading.clear()
+        self._persist()
 
     # --- довідка ---
 
@@ -151,7 +189,30 @@ class PreviewActions(FakeActions):
         self.events.append(event)
         if now - when > timedelta(hours=1):
             self.events.extend(assumed_waterings(pot, species, now, self._engine))
+        self._persist()
         return self.open_zone(zone_id)
+
+    def remove_pot(self, zone_id: str, pot_id: str) -> ZoneView:
+        self._pot(zone_id, pot_id)
+        self.pots = [pot for pot in self.pots if pot.id != pot_id]
+        self.events = [event for event in self.events if event.pot_id != pot_id]
+        self._persist()
+        return self.open_zone(zone_id)
+
+    def change_pot(
+        self,
+        zone_id: str,
+        pot_id: str,
+        name: str,
+        variety: str,
+        soil: SoilType,
+        planted_at: datetime | None = None,
+    ) -> ZoneView:
+        old = self._pot(zone_id, pot_id)
+        self.pots = [pot for pot in self.pots if pot.id != pot_id]
+        self.events = [event for event in self.events if event.pot_id != pot_id]
+        view = self.plant(zone_id, name, variety, soil, old.x, old.y, planted_at)
+        return view
 
     def water(self, zone_id: str, pot_id: str, at: datetime | None = None) -> ZoneView:
         return self._log(zone_id, pot_id, CareAction.WATER, at)
@@ -173,6 +234,7 @@ class PreviewActions(FakeActions):
         now = sim_now(self.settings)
         when = now if at is None else min(max(as_utc(at), as_utc(pot.profile.planted_at)), now)
         self.events.append(self._engine.make_event(pot_id, action, when))
+        self._persist()
         return self.open_zone(zone_id)
 
     # --- зріз зони ---
@@ -212,6 +274,28 @@ class PreviewActions(FakeActions):
         crops = sorted({card.species.species_id for card in view.cards})
         return f"{view.zone.id}|{view.zone.territory}|{','.join(crops)}"
 
+    def alerts_for_zone(self, zone_id: str) -> tuple[WeatherAlert, ...]:
+        """Легкий шлях для банера: без GrowthEngine.advance на кожен тік опитування."""
+        zone = self._zone(zone_id)
+        crops: dict[str, SpeciesProfile] = {}
+        for pot in self.pots:
+            if pot.zone_id != zone_id:
+                continue
+            species = self._species_for(pot)
+            crops[species.species_id] = species
+        key = f"{zone.id}|{zone.territory}|{','.join(sorted(crops))}"
+        with self._lock:
+            cached = self._alerts.get(key)
+            fresh = cached is not None and time.monotonic() - cached[0] < ALERTS_TTL_S
+            if not fresh and key not in self._loading:
+                self._loading.add(key)
+                threading.Thread(
+                    target=self._fetch_crops,
+                    args=(key, zone.territory, list(crops.values())),
+                    daemon=True,
+                ).start()
+        return cached[1] if cached else ()
+
     def _cached_alerts(self, view: ZoneView) -> tuple[WeatherAlert, ...]:
         key = self._key(view)
         with self._lock:
@@ -223,10 +307,13 @@ class PreviewActions(FakeActions):
         return cached[1] if cached else ()
 
     def _fetch(self, key: str, view: ZoneView) -> None:
+        crops = list({card.species.species_id: card.species for card in view.cards}.values())
+        self._fetch_crops(key, view.zone.territory, crops)
+
+    def _fetch_crops(self, key: str, territory: str, crops: list[SpeciesProfile]) -> None:
         now = real_now()  # погода завжди за справжнім сьогодні, не за «+1 день»
-        crops: list[SpeciesProfile | None] = list({card.species.species_id: card.species for card in view.cards}.values())
         try:
-            groups = [self._weather.alerts(view.zone.territory, crop, now) for crop in (crops or [None])]  # type: ignore[arg-type]
+            groups = [self._weather.alerts(territory, crop, now) for crop in (crops or [None])]  # type: ignore[arg-type]
             alerts = merge_alerts(groups)
         except Exception:  # noqa: BLE001 — погода не має валити фасад
             alerts = ()
@@ -234,3 +321,8 @@ class PreviewActions(FakeActions):
             self._loading.discard(key)
             if alerts:
                 self._alerts[key] = (time.monotonic(), alerts)
+
+
+def _garden_db_path() -> str:
+    home = os.environ.get("CFFIXED_USER_HOME") or os.environ.get("HOME") or str(Path.home())
+    return str(Path(home) / "Documents" / "HappyGarden" / "garden.db")

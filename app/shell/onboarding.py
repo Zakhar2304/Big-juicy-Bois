@@ -1,4 +1,4 @@
-"""Перший вхід: нік, назва зони, тип і місцевість. Акаунта на сервері немає — це налаштування і перша зона."""
+"""Після входу в акаунт: нік і перша зона. Це не реєстрація email — лише сад."""
 
 from __future__ import annotations
 
@@ -13,11 +13,13 @@ from app.contracts.labels import (
     APP_NAME,
     BTN_BACK,
     BTN_CREATE_ZONE,
+    BTN_LOGOUT,
     LBL_NICKNAME,
     LBL_TERRITORY,
     LBL_ZONE_KIND,
     LBL_ZONE_NAME,
-    SUBTITLE,
+    ONBOARDING_SUBTITLE,
+    ONBOARDING_TITLE,
     ZONE_LABELS,
 )
 from app.contracts.models import ZoneKind
@@ -32,13 +34,19 @@ def onboarding_view(
     on_done: Callable[[], None],
     ask_nickname: bool = True,
     on_cancel: Callable[[], None] | None = None,
+    *,
+    account_email: str | None = None,
+    on_logout: Callable[[], None] | None = None,
 ) -> ft.Control:
-    """Перший вхід (з ніком) або ще одна зона (ask_nickname=False, з кнопкою «Назад»)."""
+    """Перша зона після логіну (з ніком) або ще одна зона (ask_nickname=False)."""
     settings = actions.get_settings()
+    suggested = ""
+    if ask_nickname and account_email and "@" in account_email:
+        suggested = account_email.split("@", 1)[0][:20]
 
     nickname = ft.TextField(
         label=LBL_NICKNAME,
-        value="" if ask_nickname else settings.nickname,
+        value=("" if ask_nickname else settings.nickname) or suggested,
         autofocus=ask_nickname,
         visible=ask_nickname,
         max_length=20,
@@ -105,6 +113,42 @@ def onboarding_view(
         ],
     )
 
+    account_line: list[ft.Control] = []
+    if ask_nickname:
+        account_line = [
+            ft.Text(ONBOARDING_TITLE, size=22, weight=ft.FontWeight.BOLD, color=TEXT, text_align=ft.TextAlign.CENTER),
+            ft.Text(ONBOARDING_SUBTITLE, size=14, color=ft.Colors.with_opacity(0.7, TEXT), text_align=ft.TextAlign.CENTER),
+        ]
+        if account_email:
+            account_line.append(
+                ft.Container(
+                    padding=ft.Padding(12, 8, 12, 8),
+                    border_radius=12,
+                    bgcolor=ft.Colors.with_opacity(0.08, GREEN),
+                    content=ft.Row(
+                        spacing=8,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        controls=[
+                            ft.Icon(ft.Icons.VERIFIED_USER_ROUNDED, color=GREEN, size=18),
+                            ft.Text(account_email, size=13, color=TEXT, weight=ft.FontWeight.W_600),
+                        ],
+                    ),
+                )
+            )
+        if on_logout is not None:
+            account_line.append(
+                ft.TextButton(
+                    BTN_LOGOUT,
+                    icon=ft.Icons.LOGOUT_ROUNDED,
+                    on_click=lambda _: on_logout() if on_logout else None,
+                )
+            )
+    else:
+        account_line = [
+            ft.Text(APP_NAME, size=30, weight=ft.FontWeight.BOLD, color=TEXT, text_align=ft.TextAlign.CENTER),
+            ft.Text("Нова зона", size=15, color=ft.Colors.with_opacity(0.7, TEXT), text_align=ft.TextAlign.CENTER),
+        ]
+
     form = ft.Container(
         width=FORM_WIDTH,
         padding=28,
@@ -118,8 +162,7 @@ def onboarding_view(
             controls=[
                 back,
                 ft.Icon(ft.Icons.ECO_ROUNDED, color=GREEN, size=40),
-                ft.Text(APP_NAME, size=30, weight=ft.FontWeight.BOLD, color=TEXT, text_align=ft.TextAlign.CENTER),
-                ft.Text(SUBTITLE, size=15, color=ft.Colors.with_opacity(0.7, TEXT), text_align=ft.TextAlign.CENTER),
+                *account_line,
                 ft.Container(height=4),
                 nickname,
                 zone_name,

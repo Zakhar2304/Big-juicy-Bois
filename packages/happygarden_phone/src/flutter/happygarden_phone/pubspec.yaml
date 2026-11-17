@@ -1,0 +1,22 @@
+name: happygarden_phone
+description: Home screen widget for HappyGarden
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.2.3 <4.0.0"
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flet: 1.1.2
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.happygarden.phone
+        pluginClass: HappygardenPhonePlugin
+      ios:
+        pluginClass: HappygardenPhonePlugin

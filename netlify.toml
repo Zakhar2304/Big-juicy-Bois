@@ -1,10 +1,11 @@
 [build]
-  command = "pip install -r requirements.txt && flet build web --yes"
+  command = "pip install -r requirements.txt && flet build web --yes && mkdir -p build/web/legal && cp -R legal/. build/web/legal/"
   publish = "build/web"
 
 [build.environment]
   PYTHON_VERSION = "3.12"
 
+# Без force: реальні /legal/*.html віддаються як файли, решта — SPA.
 [[redirects]]
   from = "/*"
   to = "/index.html"

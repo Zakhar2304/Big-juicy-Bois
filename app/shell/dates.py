@@ -36,6 +36,24 @@ def span(hours: float) -> str:
     return f"{n} {_plural(n, 'день', 'дні', 'днів')}"
 
 
+def duration_words(hours: float) -> str:
+    """«1 година», «2 години», «5 годин», «3 дні» — для віджета на екрані телефону."""
+    hours = abs(hours)
+    if hours < 1:
+        return "менше години"
+    if hours < 24:
+        n = int(round(hours))
+        if n < 1:
+            n = 1
+        if n >= 24:
+            return f"1 {_plural(1, 'день', 'дні', 'днів')}"
+        return f"{n} {_plural(n, 'година', 'години', 'годин')}"
+    n = int(round(hours / 24))
+    if n < 1:
+        n = 1
+    return f"{n} {_plural(n, 'день', 'дні', 'днів')}"
+
+
 def relative(value: datetime, now: datetime) -> str:
     """«через 2 дні» або «2 дні тому», «зараз» для меншого за годину."""
     hours = (_utc(value) - _utc(now)).total_seconds() / 3600

@@ -9,3 +9,7 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+.env
+auth_session.json
+
+**/Documents/HappyGarden/

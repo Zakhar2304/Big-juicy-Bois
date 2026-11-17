@@ -31,6 +31,7 @@ from app.contracts.labels import (
 from app.contracts.lookup import card_for
 from app.contracts.models import GrowthStage, Mood, PotCard, ZoneView
 from app.contracts.pictures import PICTURE_RATIO, pot_picture
+from app.shell.perf import pot_image
 from app.contracts.ports import Actions
 from app.shell.dates import day_month, relative, when
 from app.shell.theme import CARD, DANGER, GREEN, INFO, MIN_TAP, TEXT, WARNING
@@ -140,7 +141,7 @@ def pot_sheet(
 
         picture = pot_picture(pot.profile.species_id, pot.stage)
         thumb: ft.Control = (
-            ft.Image(src=picture, width=70, height=70 / PICTURE_RATIO, fit=ft.BoxFit.CONTAIN)
+            pot_image(picture, 70, 70 / PICTURE_RATIO)
             if picture
             else ft.Text(species.glyph, size=44)
         )

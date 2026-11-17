@@ -8,21 +8,47 @@ dependencies = [
   "flet>=1.0,<2",
   "httpx>=0.27",
   "certifi>=2024.0.0",
+  "python-dotenv>=1.0",
+  "happygarden-phone",
 ]
 
 [tool.flet]
 org = "com.happygarden"
 product = "HappyGarden"
 company = "HappyGarden"
-# CocoaPods + serious_python: avoid SPM/Pods conflict on iOS
+# CocoaPods + SPM у Flet 1.x конфліктують на iOS.
 swift_package_manager = false
+
+[tool.flet.dev_packages]
+happygarden-phone = "packages/happygarden_phone"
+
+[tool.flet.ios.entitlement]
+"com.apple.security.application-groups" = ["group.com.happygarden.app"]
 
 [tool.flet.app]
 module = "main.py"
+# Важкі оригінали й доки не пакуємо в сайт/IPA — менше памʼяті на старті.
+exclude = [
+  "3d-models",
+  "docs",
+  "tests",
+  "music",
+  "legal",
+  ".claude",
+  ".env",
+  ".env.example",
+  "bg_for site.png",
+  "Firefly_creative_upsampler_v1 (1).jpg",
+  "greenhouse_table_zero.glb",
+  "*.md",
+  "packages",
+]
 
 [tool.flet.ios]
 bundle_id = "com.happygarden.app"
 
 [tool.flet.web]
-# Netlify віддає лише index.html. Hash не вимагає окремої сторінки на кожен маршрут.
+# Hash — без SPA-404 на Netlify; CanvasKit швидший за skwasm для Pyodide.
 route_url_strategy = "hash"
+renderer = "canvaskit"
+wasm = false

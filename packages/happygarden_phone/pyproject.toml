@@ -1,0 +1,16 @@
+[project]
+name = "happygarden-phone"
+version = "0.1.0"
+description = "Віджет домашнього екрана HappyGarden: час до поливки і ріст."
+requires-python = ">=3.11"
+dependencies = ["flet>=1.0,<2"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"flutter.happygarden_phone" = ["**/*"]

@@ -6,6 +6,8 @@ from collections.abc import Callable
 
 import flet as ft
 
+from app.shell.perf import bg_image
+
 BG = "#F4F7F2"
 GREEN = "#2E7D32"
 CARD = "#FFFFFF"
@@ -14,10 +16,40 @@ DANGER = "#C62828"
 WARNING = "#EF6C00"
 INFO = "#1565C0"
 
-# Шлях відносно assets/. Оригінал 4096 px лежить у корені, тут легша копія для вебу.
+# Шлях відносно assets/. Оригінал лежить у корені, тут легша копія для вебу.
 GREENHOUSE_BG = "backgrounds/greenhouse.jpg"
 
 MIN_TAP = 44
+
+
+def center_sheet(body: ft.Column) -> ft.Control:
+    """Прокрутка по центру: на телефоні на всю ширину, на широкому екрані не ширше за картку."""
+
+    def fit(page: ft.Page | None) -> None:
+        if page is None or not page.width:
+            return
+        width = min(460.0, max(280.0, float(page.width) - 28))
+        if body.width != width:
+            body.width = width
+
+    class _Frame(ft.Column):
+        def before_update(self) -> None:
+            fit(self.page)
+
+    return _Frame(
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        controls=[ft.Container(padding=ft.Padding(14, 6, 14, 28), content=body)],
+    )
+
+
+def mounted(control: ft.Control) -> bool:
+    """Чи контрол уже на сторінці. До першого кадру page кидає RuntimeError."""
+    try:
+        return control.page is not None
+    except RuntimeError:
+        return False
 
 
 def fill(control: ft.Control) -> ft.Control:
@@ -45,21 +77,25 @@ def greenhouse_backdrop(
     3. Та сама картинка ще раз, але з радіальною маскою: у центрі видно повністю,
        до країв плавно зникає в розмиття.
     """
-    scene = make_scene or (lambda: ft.Image(src=GREENHOUSE_BG, fit=ft.BoxFit.COVER))
+    # Одну картинку двічі дорожче: жива сцена з горщиками ×2 лагала меню.
+    # Для фото достатньо одного шару + вуаль; чітке коло — лише якщо сцена легка.
+    scene = make_scene or (lambda: bg_image(GREENHOUSE_BG))
+    base = scene()
     layers: list[ft.Control] = [
-        fill(ft.Container(content=scene())),
+        fill(ft.Container(content=base)),
         fill(
             ft.Container(
-                blur=ft.Blur(blur, blur, ft.BlurTileMode.MIRROR),
+                # Менший blur швидший на телефоні й у браузері.
+                blur=ft.Blur(min(blur, 12), min(blur, 12), ft.BlurTileMode.MIRROR),
                 bgcolor=ft.Colors.with_opacity(veil, CARD),
             )
         ),
     ]
-    if clear_center:
+    if clear_center and make_scene is None:
         layers.append(
             fill(
                 ft.ShaderMask(
-                    content=scene(),
+                    content=bg_image(GREENHOUSE_BG),
                     shader=ft.RadialGradient(
                         center=ft.Alignment(0, -0.02),
                         radius=0.5,
